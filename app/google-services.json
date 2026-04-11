@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "304310323285",
+    "firebase_url": "https://skillbarter-f6b24-default-rtdb.firebaseio.com",
+    "project_id": "skillbarter-f6b24",
+    "storage_bucket": "skillbarter-f6b24.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:304310323285:android:0e04bf24c22df550f4acdc",
+        "android_client_info": {
+          "package_name": "com.example.sgp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB3uHExta3J2RazNAoRwRDf9r6kM4eSZBo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
