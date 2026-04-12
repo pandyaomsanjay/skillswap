@@ -293,12 +293,12 @@ class Createaccount : BaseActivity() {
     }
 
     private fun createUserAccount() {
-        val nameInput = findViewById<TextInputLayout>(R.id.name)
-        val emailInput = findViewById<TextInputLayout>(R.id.email)
-        val phoneInput = findViewById<TextInputLayout>(R.id.phone)
-        val locationInput = findViewById<TextInputLayout>(R.id.tilLocation)
-        val passwordInput = findViewById<TextInputLayout>(R.id.password)
-        val countryCodeInput = findViewById<MaterialAutoCompleteTextView>(R.id.actvCountryCode)
+        val nameInput           = findViewById<TextInputLayout>(R.id.name)
+        val emailInput          = findViewById<TextInputLayout>(R.id.email)
+        val phoneInput          = findViewById<TextInputLayout>(R.id.phone)
+        val locationInput       = findViewById<TextInputLayout>(R.id.tilLocation)
+        val passwordInput       = findViewById<TextInputLayout>(R.id.password)
+        val countryCodeInput    = findViewById<MaterialAutoCompleteTextView>(R.id.actvCountryCode)
 
         val countryCode = (countryCodeInput.tag as? String) ?: run {
             val codePattern = Regex("""^(\+\d+)""")
@@ -306,33 +306,47 @@ class Createaccount : BaseActivity() {
         }
 
         val phoneNumber = phoneInput.editText?.text.toString().trim()
-        val phone = countryCode + phoneNumber
-        val name = capitalizeName(nameInput.editText?.text.toString().trim())
-        val email = emailInput.editText?.text.toString().trim()
-        val location = locationInput.editText?.text.toString().trim()
-        val password = passwordInput.editText?.text.toString()
+        val phone       = countryCode + phoneNumber
+        val name        = capitalizeName(nameInput.editText?.text.toString().trim())
+        val email       = emailInput.editText?.text.toString().trim()
+        val location    = locationInput.editText?.text.toString().trim()
+        val password    = passwordInput.editText?.text.toString()
 
         database.orderByChild("email").equalTo(email)
             .addListenerForSingleValueEvent(object : ValueEventListener {
                 override fun onDataChange(snapshot: DataSnapshot) {
                     if (snapshot.exists()) {
                         emailInput.error = "Email already registered"
-                        Toast.makeText(this@Createaccount, "Email already exists.", Toast.LENGTH_LONG).show()
+                        Toast.makeText(
+                            this@Createaccount,
+                            "Email already exists.",
+                            Toast.LENGTH_LONG
+                        ).show()
                     } else {
-                        // ✅ Save to Firebase first (no navigation inside)
+                        // ✅ Save to Firebase (NO SharedPreferences here)
                         saveUserToDatabase(name, email, phone, location, password)
-                        // ✅ Then send OTP and navigate to OtpActivity
-                        sendSupabaseOtp(name, email, phone, password)
+                        // ✅ Send OTP then go to OtpActivity
+                        sendSupabaseOtp(name, email, phone, location, password)
                     }
                 }
 
                 override fun onCancelled(error: DatabaseError) {
-                    Toast.makeText(this@Createaccount, "Database error: ${error.message}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(
+                        this@Createaccount,
+                        "Database error: ${error.message}",
+                        Toast.LENGTH_SHORT
+                    ).show()
                 }
             })
     }
 
-    private fun sendSupabaseOtp(name: String, email: String, phone: String, password: String) {
+    private fun sendSupabaseOtp(
+        name: String,
+        email: String,
+        phone: String,
+        location: String,
+        password: String
+    ) {
         lifecycleScope.launch {
             try {
                 SupabaseClient.client.auth.signInWith(OTP) {
@@ -346,12 +360,14 @@ class Createaccount : BaseActivity() {
                     Toast.LENGTH_LONG
                 ).show()
 
-                // ✅ Navigate to OtpActivity
-                val intent = Intent(this@Createaccount, OtpActivity::class.java)
-                intent.putExtra("email", email)
-                intent.putExtra("name", name)
-                intent.putExtra("phone", phone)
-                intent.putExtra("password", password)
+                // ✅ Pass location too so OtpActivity can use it if needed
+                val intent = Intent(this@Createaccount, OtpActivity::class.java).apply {
+                    putExtra("email",    email)
+                    putExtra("name",     name)
+                    putExtra("phone",    phone)
+                    putExtra("location", location)
+                    putExtra("password", password)
+                }
                 startActivity(intent)
                 finish()
 
@@ -365,7 +381,7 @@ class Createaccount : BaseActivity() {
         }
     }
 
-    // ✅ Removed navigation from here — only saves data
+    // ✅ Only saves to Firebase — NO SharedPreferences, NO navigation
     private fun saveUserToDatabase(
         name: String,
         email: String,
@@ -374,40 +390,35 @@ class Createaccount : BaseActivity() {
         password: String
     ) {
         val user = Users(
-            name = name,
-            email = email,
-            phone = phone,
-            location = location,
-            password = password,
-            rating = 0.0,
+            name            = name,
+            email           = email,
+            phone           = phone,
+            location        = location,
+            password        = password,
+            rating          = 0.0,
             completedTrades = 0,
-            profileImage = "",
-            userType = "standard",
-            joinedDate = System.currentTimeMillis()
+            profileImage    = "",
+            userType        = "standard",
+            joinedDate      = System.currentTimeMillis()
         )
 
         val userId = email.replace(".", "_")
 
         database.child(userId).setValue(user)
-            .addOnSuccessListener {
-                // ✅ Save to SharedPreferences only, NO navigation
-                val prefs = getSharedPreferences("SkillSwapPrefs", MODE_PRIVATE)
-                with(prefs.edit()) {
-                    putString("user_name", name)
-                    putString("user_email", email)
-                    putString("user_location", location)
-                    putInt("user_points", 1250)
-                    putInt("user_total_trades", 0)
-                    putFloat("user_rating", 0f)
-                    putInt("user_total_skills", 0)
-                    apply()
-                }
-            }
             .addOnFailureListener {
-                Toast.makeText(this, "Failed to save user data: ${it.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(
+                    this,
+                    "Failed to save user data: ${it.message}",
+                    Toast.LENGTH_SHORT
+                ).show()
             }
+        // ✅ SharedPreferences removed — written in OtpActivity after verification
     }
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// DATA CLASSES & ADAPTERS (unchanged)
+// ══════════════════════════════════════════════════════════════════════════════
 
 data class Country(
     val name: String,
@@ -415,9 +426,7 @@ data class Country(
     val flagEmoji: String,
     val alpha2Code: String
 ) {
-    override fun toString(): String {
-        return "$dialCode $flagEmoji"
-    }
+    override fun toString(): String = "$dialCode $flagEmoji"
 }
 
 class CountryArrayAdapter(
@@ -425,13 +434,11 @@ class CountryArrayAdapter(
     private val countries: List<Country>
 ) : ArrayAdapter<Country>(context, 0, countries) {
 
-    override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
-        return createView(position, convertView, parent)
-    }
+    override fun getView(position: Int, convertView: View?, parent: ViewGroup): View =
+        createView(position, convertView, parent)
 
-    override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup): View {
-        return createView(position, convertView, parent)
-    }
+    override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup): View =
+        createView(position, convertView, parent)
 
     private fun createView(position: Int, convertView: View?, parent: ViewGroup): View {
         val view = convertView ?: LayoutInflater.from(context).inflate(
@@ -469,9 +476,8 @@ class PlaceAutocompleteAdapter(
 
     override fun getFilter(): Filter {
         return object : Filter() {
-            override fun performFiltering(constraint: CharSequence?): FilterResults {
-                return FilterResults()
-            }
+            override fun performFiltering(constraint: CharSequence?): FilterResults =
+                FilterResults()
 
             override fun publishResults(constraint: CharSequence?, results: FilterResults?) {
                 runnable?.let { handler.removeCallbacks(it) }
