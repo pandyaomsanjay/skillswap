@@ -1,22 +1,24 @@
 package com.example.sgp
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.LayoutInflater
-import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.bumptech.glide.Glide
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.material.textfield.TextInputEditText
 import com.google.firebase.database.*
 
-class ExploreActivity : BaseActivity() {   // Changed from AppCompatActivity
+class ExploreActivity : BaseActivity() {
 
     private lateinit var recyclerView: RecyclerView
     private lateinit var adapter: SkillAdapter
@@ -25,19 +27,26 @@ class ExploreActivity : BaseActivity() {   // Changed from AppCompatActivity
     private lateinit var database: DatabaseReference
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)   // This will now call BaseActivity.onCreate
+        super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_explore)
 
-        // Toolbar
         val toolbar: androidx.appcompat.widget.Toolbar = findViewById(R.id.toolbar)
         setSupportActionBar(toolbar)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
 
-        // RecyclerView
         recyclerView = findViewById(R.id.recyclerView)
         recyclerView.layoutManager = LinearLayoutManager(this)
         adapter = SkillAdapter(displayedSkills) { skill ->
-            Toast.makeText(this, skill.title, Toast.LENGTH_SHORT).show()
+            // When user clicks on a single video skill, play it
+            if (skill.skillType == "single" && !skill.videoUrl.isNullOrEmpty()) {
+                playVideo(skill.videoUrl!!)
+            } else if (skill.skillType == "playlist") {
+                val intent = Intent(this, PlaylistActivity::class.java)
+                intent.putExtra("skillId", skill.id)
+                startActivity(intent)
+            } else {
+                Toast.makeText(this, "No video available", Toast.LENGTH_SHORT).show()
+            }
         }
         recyclerView.adapter = adapter
 
@@ -51,14 +60,15 @@ class ExploreActivity : BaseActivity() {   // Changed from AppCompatActivity
             override fun afterTextChanged(s: Editable?) {}
         })
 
-        // Firebase
+        // Category chips
+        setupCategoryChips()
+
         database = FirebaseDatabase.getInstance().reference.child("Skills")
         loadSkills()
 
-        // Bottom Navigation
+        // Bottom navigation
         val bottomNav = findViewById<BottomNavigationView>(R.id.bottomNavigation)
         bottomNav.selectedItemId = R.id.nav_explore
-
         bottomNav.setOnItemSelectedListener { item ->
             when (item.itemId) {
                 R.id.nav_home -> {
@@ -84,6 +94,50 @@ class ExploreActivity : BaseActivity() {   // Changed from AppCompatActivity
         }
     }
 
+    private fun setupCategoryChips() {
+        val chipAll = findViewById<com.google.android.material.chip.Chip>(R.id.chipAll)
+        val chipProgramming = findViewById<com.google.android.material.chip.Chip>(R.id.chipProgramming)
+        val chipDesign = findViewById<com.google.android.material.chip.Chip>(R.id.chipDesign)
+        val chipMusic = findViewById<com.google.android.material.chip.Chip>(R.id.chipMusic)
+        val chipLanguage = findViewById<com.google.android.material.chip.Chip>(R.id.chipLanguage)
+
+        val clickListener = { chip: com.google.android.material.chip.Chip, category: String ->
+            chip.setOnClickListener {
+                filterByCategory(category)
+                // Visual feedback: highlight selected chip
+                resetChipColors()
+                chip.isChecked = true
+            }
+        }
+
+        clickListener(chipAll, "All")
+        clickListener(chipProgramming, "Programming")
+        clickListener(chipDesign, "Design")
+        clickListener(chipMusic, "Music")
+        clickListener(chipLanguage, "Language")
+    }
+
+    private fun resetChipColors() {
+        val chips = listOf(
+            findViewById<com.google.android.material.chip.Chip>(R.id.chipAll),
+            findViewById(R.id.chipProgramming),
+            findViewById(R.id.chipDesign),
+            findViewById(R.id.chipMusic),
+            findViewById(R.id.chipLanguage)
+        )
+        chips.forEach { it.isChecked = false }
+    }
+
+    private fun filterByCategory(category: String) {
+        displayedSkills.clear()
+        if (category == "All") {
+            displayedSkills.addAll(allSkills)
+        } else {
+            displayedSkills.addAll(allSkills.filter { it.category == category })
+        }
+        adapter.notifyDataSetChanged()
+    }
+
     private fun loadSkills() {
         database.addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
@@ -95,7 +149,6 @@ class ExploreActivity : BaseActivity() {   // Changed from AppCompatActivity
                 displayedSkills.addAll(allSkills)
                 adapter.notifyDataSetChanged()
             }
-
             override fun onCancelled(error: DatabaseError) {
                 Toast.makeText(this@ExploreActivity, error.message, Toast.LENGTH_SHORT).show()
             }
@@ -116,24 +169,33 @@ class ExploreActivity : BaseActivity() {   // Changed from AppCompatActivity
         adapter.notifyDataSetChanged()
     }
 
-    override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        if (item.itemId == android.R.id.home) {
-            finish()
-            return true
+    private fun playVideo(videoUrl: String) {
+        try {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(videoUrl))
+            intent.setDataAndType(Uri.parse(videoUrl), "video/*")
+            startActivity(Intent.createChooser(intent, "Play video with"))
+        } catch (e: Exception) {
+            Toast.makeText(this, "Cannot play video", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    override fun onOptionsItemSelected(item: android.view.MenuItem): Boolean {
+        if (item.itemId == android.R.id.home) finish()
         return super.onOptionsItemSelected(item)
     }
 
-    // Adapter
-    class SkillAdapter(
+    // RecyclerView Adapter with video thumbnails
+    inner class SkillAdapter(
         private val skills: List<Skill>,
         private val onItemClick: (Skill) -> Unit
     ) : RecyclerView.Adapter<SkillAdapter.ViewHolder>() {
 
-        class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+        inner class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+            val ivThumbnail: ImageView = itemView.findViewById(R.id.ivThumbnail)
             val tvTitle: TextView = itemView.findViewById(R.id.tvTitle)
             val tvCategory: TextView = itemView.findViewById(R.id.tvCategory)
             val tvUser: TextView = itemView.findViewById(R.id.tvUser)
+            val tvCredits: TextView = itemView.findViewById(R.id.tvCredits)
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -142,23 +204,25 @@ class ExploreActivity : BaseActivity() {   // Changed from AppCompatActivity
             return ViewHolder(view)
         }
 
-        // In ExploreActivity's SkillAdapter onItemClick
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val skill = skills[position]
             holder.tvTitle.text = skill.title
             holder.tvCategory.text = skill.category
             holder.tvUser.text = "By: ${skill.userName}"
-            holder.itemView.setOnClickListener {
-                if (skill.skillType == "playlist") {
-                    // Navigate to PlaylistActivity with skill.id
-                    val intent = Intent(holder.itemView.context, PlaylistActivity::class.java)
-                    intent.putExtra("skillId", skill.id)
-                    holder.itemView.context.startActivity(intent)
-                } else {
-                    // Navigate to video view / trade screen
-                    Toast.makeText(holder.itemView.context, skill.title, Toast.LENGTH_SHORT).show()
-                }
+            holder.tvCredits.text = "${skill.credits} credits"
+
+            // Load thumbnail from videoUrl using Glide
+            if (!skill.videoUrl.isNullOrEmpty()) {
+                Glide.with(holder.itemView.context)
+                    .load(skill.videoUrl)
+                    .placeholder(R.drawable.baseline_videocam_24)
+                    .error(R.drawable.baseline_videocam_24)
+                    .into(holder.ivThumbnail)
+            } else {
+                holder.ivThumbnail.setImageResource(R.drawable.baseline_videocam_24)
             }
+
+            holder.itemView.setOnClickListener { onItemClick(skill) }
         }
 
         override fun getItemCount() = skills.size
