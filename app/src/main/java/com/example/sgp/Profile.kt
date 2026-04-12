@@ -215,8 +215,40 @@ class Profile : BaseActivity() {
 
     private fun addSkillView(skill: Skill) {
         val view = layoutInflater.inflate(R.layout.item_profile_skill, skillsContainer, false)
-        val tvSkill = view.findViewById<TextView>(R.id.tvSkill)
-        tvSkill.text = skill.title
+        val ivThumbnail = view.findViewById<ImageView>(R.id.ivSkillThumbnail)
+        val tvTitle = view.findViewById<TextView>(R.id.tvSkillTitle)
+        val tvCredits = view.findViewById<TextView>(R.id.tvSkillCredits)
+        val ivPlay = view.findViewById<ImageView>(R.id.ivPlayIcon)
+
+        tvTitle.text = skill.title
+        tvCredits.text = "${skill.credits} credits"
+
+        // Load video thumbnail using Glide (works with direct video URLs)
+        if (!skill.videoUrl.isNullOrEmpty()) {
+            Glide.with(this)
+                .load(skill.videoUrl)
+                .placeholder(R.drawable.baseline_videocam_24)
+                .error(R.drawable.baseline_videocam_24)
+                .into(ivThumbnail)
+        } else {
+            // For playlist skills, you might show a different placeholder
+            ivThumbnail.setImageResource(R.drawable.baseline_videocam_24)
+        }
+
+        // Play video when clicked (or tap the play icon)
+        val clickListener = View.OnClickListener {
+            if (!skill.videoUrl.isNullOrEmpty()) {
+                playVideo(skill.videoUrl)
+            } else if (skill.skillType == "playlist" && !skill.videos.isNullOrEmpty()) {
+                // For playlist, you could play the first video or show a list
+                playVideo(skill.videos!![0].videoUrl)
+            } else {
+                Toast.makeText(this, "No video available", Toast.LENGTH_SHORT).show()
+            }
+        }
+        view.setOnClickListener(clickListener)
+        ivPlay.setOnClickListener(clickListener)
+
         skillsContainer.addView(view)
     }
 
@@ -297,5 +329,15 @@ class Profile : BaseActivity() {
     override fun onResume() {
         super.onResume()
         loadUserProfile()
+    }
+
+    private fun playVideo(videoUrl: String) {
+        try {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(videoUrl))
+            intent.setDataAndType(Uri.parse(videoUrl), "video/*")
+            startActivity(Intent.createChooser(intent, "Play video with"))
+        } catch (e: Exception) {
+            Toast.makeText(this, "Cannot play video: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
     }
 }
